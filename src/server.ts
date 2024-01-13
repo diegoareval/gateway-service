@@ -9,6 +9,8 @@ import cors from 'cors';
 import hpp from 'hpp';
 import compression from 'compression';
 import http from 'http';
+import { elasticsearch } from '@gateway/elasticsearch';
+import { appRoutes } from '@gateway/routes'
 
 const SERVER_PORT = 4000;
 
@@ -17,7 +19,7 @@ export class GatewayServer {
   private log: Logger;
   constructor(application: Application) {
     this.app = application;
-    this.log =  winstonLogger(`${config.ELASTIC_SEARCH_URL}`, 'apiGatewayServer', 'debug');
+    this.log = winstonLogger(`${config.ELASTIC_SEARCH_URL}`, 'apiGatewayServer', 'debug');
   }
 
   public start(): void {
@@ -34,15 +36,15 @@ export class GatewayServer {
     application.use(
       cookieSession({
         name: 'session',
-        keys: [],
+        keys: [`${config.SECRET_KEY_ONE}`, `${config.SECRET_KEY_TWO}`],
         maxAge: 24 * 7 * 36000000,
-        secure: false // update using config values
+        secure: config.NODE_ENV != 'development'
         // sameSite: 'none'
       })
     );
     application.use(hpp());
     application.use(helmet());
-    application.use(cors({ origin: '', credentials: true, methods: ['GET', 'POST', 'DELETE', 'PUT', 'OPTIONS'] }));
+    application.use(cors({ origin: config.CLIENT_URL, credentials: true, methods: ['GET', 'POST', 'DELETE', 'PUT', 'OPTIONS'] }));
   }
 
   private standardMiddleware(application: Application): void {
@@ -51,9 +53,13 @@ export class GatewayServer {
     application.use(urlencoded({ limit: '200mb', extended: true }));
   }
 
-  private routesMiddleware(_application: Application): void {}
+  private routesMiddleware(application: Application): void {
+    appRoutes(application);
+  }
 
-  private startElasticSearch(): void {}
+  private startElasticSearch(): void {
+    elasticsearch.checkConnection();
+  }
 
   private errorHandler(application: Application): void {
     application.use((req: Request, res: Response, next: NextFunction) => {
